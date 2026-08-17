@@ -1,0 +1,60 @@
+services:
+  valkey:
+    image: valkey/valkey:latest
+    container_name: pdf-processor-valkey
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey_data:/data
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pdf-processor-app
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+      REDIS_HOST: valkey
+      REDIS_PORT: "6379"
+    volumes:
+      - shared_data:/mnt/uploads/
+    ports:
+      - "8000:8000"
+    depends_on:
+      - valkey
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pdf-processor-worker
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+      REDIS_HOST: valkey
+      REDIS_PORT: "6379"
+      PYTHONPATH: "/app"
+    volumes:
+      - shared_data:/mnt/uploads/
+    depends_on:
+      - valkey
+    command:
+      [
+        "python",
+        "-m",
+        "rq.cli",
+        "worker",
+        "--url",
+        "redis://valkey:6379",
+        "default",
+      ]
+    restart: unless-stopped
+
+volumes:
+  valkey_data:
+  shared_data:
